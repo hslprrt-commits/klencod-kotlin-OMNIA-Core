@@ -1,3 +1,4 @@
+
 package com.omnia.system
 
 import android.app.Activity
@@ -15,6 +16,7 @@ class MainActivity : Activity() {
 
     private lateinit var desktop: FrameLayout
     private lateinit var drawTaskbarButton: Button
+    private lateinit var browserTaskbarButton: Button
     private lateinit var windowManager: OmniaWindowManager
 
     private val backgroundColor = Color.rgb(17, 19, 22)
@@ -29,7 +31,6 @@ class MainActivity : Activity() {
             setBackgroundColor(backgroundColor)
         }
 
-        // شريط النظام العلوي
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -45,7 +46,7 @@ class MainActivity : Activity() {
         }
 
         val version = TextView(this).apply {
-            text = "  SYSTEM 1.0"
+            text = "  SYSTEM 1.1"
             textSize = 10f
             setTextColor(Color.LTGRAY)
         }
@@ -61,7 +62,6 @@ class MainActivity : Activity() {
             )
         )
 
-        // مساحة سطح المكتب
         desktop = FrameLayout(this).apply {
             setBackgroundColor(Color.rgb(21, 23, 27))
         }
@@ -75,30 +75,36 @@ class MainActivity : Activity() {
             )
         )
 
-        // أيقونة تطبيق الرسم
-        val drawIcon = TextView(this).apply {
-            text = "✎\nOMNIA Draw"
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(textColor)
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            setBackgroundColor(panelColor)
-            setOnClickListener {
-                windowManager.openDraw()
+        val drawIcon = createDesktopIcon("✎\nOMNIA Draw") {
+            windowManager.openDraw()
+        }
+
+        desktop.addView(
+            drawIcon,
+            FrameLayout.LayoutParams(
+                dp(112),
+                dp(100),
+                Gravity.TOP or Gravity.START
+            ).apply {
+                setMargins(dp(18), dp(22), 0, 0)
             }
+        )
+
+        val browserIcon = createDesktopIcon("🌐\nOMNIA Browser") {
+            windowManager.openBrowser()
         }
 
-        val iconParams = FrameLayout.LayoutParams(
-            dp(112),
-            dp(100),
-            Gravity.TOP or Gravity.START
-        ).apply {
-            setMargins(dp(18), dp(22), 0, 0)
-        }
+        desktop.addView(
+            browserIcon,
+            FrameLayout.LayoutParams(
+                dp(112),
+                dp(100),
+                Gravity.TOP or Gravity.START
+            ).apply {
+                setMargins(dp(145), dp(22), 0, 0)
+            }
+        )
 
-        desktop.addView(drawIcon, iconParams)
-
-        // شريط المهام السفلي
         val taskbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -115,29 +121,39 @@ class MainActivity : Activity() {
         }
 
         drawTaskbarButton = Button(this).apply {
-            text = "OMNIA Draw"
-            textSize = 12f
+            text = "Draw"
+            textSize = 11f
             visibility = View.GONE
             setOnClickListener {
                 windowManager.restoreDraw()
             }
         }
 
+        browserTaskbarButton = Button(this).apply {
+            text = "Browser"
+            textSize = 11f
+            visibility = View.GONE
+            setOnClickListener {
+                windowManager.restoreBrowser()
+            }
+        }
+
         taskbar.addView(
             startButton,
-            LinearLayout.LayoutParams(
-                dp(100),
-                dp(46)
-            )
+            LinearLayout.LayoutParams(dp(90), dp(46))
         )
 
         taskbar.addView(
             drawTaskbarButton,
-            LinearLayout.LayoutParams(
-                dp(130),
-                dp(46)
-            ).apply {
-                leftMargin = dp(8)
+            LinearLayout.LayoutParams(dp(90), dp(46)).apply {
+                leftMargin = dp(6)
+            }
+        )
+
+        taskbar.addView(
+            browserTaskbarButton,
+            LinearLayout.LayoutParams(dp(100), dp(46)).apply {
+                leftMargin = dp(6)
             }
         )
 
@@ -154,8 +170,24 @@ class MainActivity : Activity() {
         windowManager = OmniaWindowManager(
             this,
             desktop,
-            drawTaskbarButton
+            drawTaskbarButton,
+            browserTaskbarButton
         )
+    }
+
+    private fun createDesktopIcon(
+        label: String,
+        action: () -> Unit
+    ): TextView {
+        return TextView(this).apply {
+            text = label
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(textColor)
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            setBackgroundColor(panelColor)
+            setOnClickListener { action() }
+        }
     }
 
     private fun dp(value: Int): Int {
@@ -165,9 +197,18 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android")
     override fun onBackPressed() {
         if (::windowManager.isInitialized) {
-            windowManager.closeDraw()
+            if (!windowManager.closeActiveWindow()) {
+                super.onBackPressed()
+            }
         } else {
             super.onBackPressed()
         }
+    }
+
+    override fun onDestroy() {
+        if (::windowManager.isInitialized) {
+            windowManager.destroy()
+        }
+        super.onDestroy()
     }
 }

@@ -1,3 +1,4 @@
+
 package com.omnia.system
 
 import android.app.Activity
@@ -13,11 +14,16 @@ import android.widget.TextView
 class OmniaWindowManager(
     private val activity: Activity,
     private val desktop: FrameLayout,
-    private val taskbarButton: Button
+    private val drawTaskbarButton: Button,
+    private val browserTaskbarButton: Button
 ) {
 
     private var drawWindow: LinearLayout? = null
-    private var isMinimized = false
+    private var browserWindow: LinearLayout? = null
+
+    private var browserApp: OmniaBrowser? = null
+
+    private var lastActiveWindow: String? = null
 
     fun openDraw() {
         if (drawWindow != null) {
@@ -25,13 +31,77 @@ class OmniaWindowManager(
             return
         }
 
+        val window = createWindow("OMNIA Draw") {
+            minimizeDraw()
+        } {
+            closeDraw()
+        }
+
+        val drawApp = OmniaDrawApp(activity)
+
+        window.addView(
+            drawApp,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+
+        drawWindow = window
+        drawTaskbarButton.visibility = View.VISIBLE
+        lastActiveWindow = "draw"
+
+        desktop.post {
+            showWindow(window)
+        }
+    }
+
+    fun openBrowser() {
+        if (browserWindow != null) {
+            restoreBrowser()
+            return
+        }
+
+        val window = createWindow("OMNIA Browser") {
+            minimizeBrowser()
+        } {
+            closeBrowser()
+        }
+
+        val app = OmniaBrowser(activity)
+        browserApp = app
+
+        window.addView(
+            app.create(),
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+
+        browserWindow = window
+        browserTaskbarButton.visibility = View.VISIBLE
+        lastActiveWindow = "browser"
+
+        desktop.post {
+            showWindow(window)
+        }
+    }
+
+    private fun createWindow(
+        titleText: String,
+        minimizeAction: () -> Unit,
+        closeAction: () -> Unit
+    ): LinearLayout {
+
         val window = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(30, 33, 38))
             elevation = dp(12).toFloat()
         }
 
-        // رأس النافذة
         val header = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -40,7 +110,7 @@ class OmniaWindowManager(
         }
 
         val title = TextView(activity).apply {
-            text = "OMNIA Draw"
+            text = titleText
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
@@ -54,17 +124,13 @@ class OmniaWindowManager(
         val minimizeButton = Button(activity).apply {
             text = "_"
             textSize = 16f
-            setOnClickListener {
-                minimizeDraw()
-            }
+            setOnClickListener { minimizeAction() }
         }
 
         val closeButton = Button(activity).apply {
             text = "X"
             textSize = 13f
-            setOnClickListener {
-                closeDraw()
-            }
+            setOnClickListener { closeAction() }
         }
 
         header.addView(minimizeButton)
@@ -78,26 +144,7 @@ class OmniaWindowManager(
             )
         )
 
-        // محتوى التطبيق
-        val drawApp = OmniaDrawApp(activity)
-
-        window.addView(
-            drawApp,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-        )
-
-        drawWindow = window
-        isMinimized = false
-
-        taskbarButton.visibility = View.VISIBLE
-
-        desktop.post {
-            showWindow(window)
-        }
+        return window
     }
 
     private fun showWindow(window: LinearLayout) {
@@ -122,21 +169,19 @@ class OmniaWindowManager(
             (availableHeight * 0.82f).toInt()
         }
 
-        val params = FrameLayout.LayoutParams(
-            windowWidth,
-            windowHeight,
-            Gravity.CENTER
+        desktop.addView(
+            window,
+            FrameLayout.LayoutParams(
+                windowWidth,
+                windowHeight,
+                Gravity.CENTER
+            )
         )
-
-        desktop.addView(window, params)
-        isMinimized = false
     }
 
     fun minimizeDraw() {
         val window = drawWindow ?: return
-
         desktop.removeView(window)
-        isMinimized = true
     }
 
     fun restoreDraw() {
@@ -146,7 +191,7 @@ class OmniaWindowManager(
             showWindow(window)
         }
 
-        isMinimized = false
+        lastActiveWindow = "draw"
     }
 
     fun closeDraw() {
@@ -154,11 +199,70 @@ class OmniaWindowManager(
 
         desktop.removeView(window)
         drawWindow = null
-        isMinimized = false
-        taskbarButton.visibility = View.GONE
+        drawTaskbarButton.visibility = View.GONE
+
+        if (lastActiveWindow == "draw") {
+            lastActiveWindow =
+                if (browserWindow != null) "browser" else null
+        }
+    }
+
+    fun minimizeBrowser() {
+        val window = browserWindow ?: return
+        desktop.removeView(window)
+    }
+
+    fun restoreBrowser() {
+        val window = browserWindow ?: return
+
+        if (window.parent == null) {
+            showWindow(window)
+        }
+
+        lastActiveWindow = "browser"
+    }
+
+    fun closeBrowser() {
+        val window = browserWindow ?: return
+
+        desktop.removeView(window)
+
+        browserApp?.destroy()
+        browserApp = null
+
+        browserWindow = null
+        browserTaskbarButton.visibility = View.GONE
+
+        if (lastActiveWindow == "browser") {
+            lastActiveWindow =
+                if (drawWindow != null) "draw" else null
+        }
+    }
+
+    fun closeActiveWindow(): Boolean {
+        return when (lastActiveWindow) {
+            "draw" -> {
+                closeDraw()
+                true
+            }
+
+            "browser" -> {
+                closeBrowser()
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    fun destroy() {
+        closeDraw()
+        closeBrowser()
     }
 
     private fun dp(value: Int): Int {
-        return (value * activity.resources.displayMetrics.density).toInt()
+        return (
+            value * activity.resources.displayMetrics.density
+        ).toInt()
     }
 }
