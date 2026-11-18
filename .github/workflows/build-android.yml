@@ -32,18 +32,19 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-34 build-tools;34.0.0'
+          packages: |
+            platforms;android-34
+            build-tools;34.0.0
 
       - name: Accept Android SDK licenses
         shell: bash
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          set -e
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-          fi
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -name sdkmanager | sort -V | tail -n 1)"
 
-          if [ ! -x "$SDKMANAGER" ]; then
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
             echo "ERROR: sdkmanager not found"
             exit 1
           fi
@@ -51,6 +52,7 @@ jobs:
           set +o pipefail
           yes | "$SDKMANAGER" --licenses
           RESULT=${PIPESTATUS[1]}
+          set -o pipefail
 
           if [ "$RESULT" -ne 0 ]; then
             echo "ERROR: SDK license acceptance failed"
@@ -62,6 +64,8 @@ jobs:
       - name: Verify Android SDK
         shell: bash
         run: |
+          set -e
+
           echo "ANDROID_HOME=$ANDROID_HOME"
 
           test -d "$ANDROID_HOME/platforms/android-34" || {
@@ -76,6 +80,49 @@ jobs:
 
           echo "Android SDK verification passed."
 
+      - name: Verify Gradle project
+        shell: bash
+        run: |
+          set -e
+
+          test -d app || {
+            echo "ERROR: app directory not found"
+            exit 1
+          }
+
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            echo "Using Gradle Wrapper"
+            ./gradlew --version
+          elif command -v gradle >/dev/null 2>&1; then
+            echo "Using installed Gradle"
+            gradle --version
+          else
+            echo "ERROR: No Gradle Wrapper or installed Gradle found"
+            exit 1
+          fi
+
+      - name: Validate Android manifests
+        shell: bash
+        run: |
+          set -e
+
+          python3 - <<'PY'
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          manifests = list(pathlib.Path("app/src").rglob("AndroidManifest.xml"))
+
+          if not manifests:
+              raise SystemExit("ERROR: AndroidManifest.xml not found")
+
+          for manifest in manifests:
+              print("Checking:", manifest)
+              ET.parse(manifest)
+
+          print("Manifest XML syntax OK")
+          PY
+
       - name: Build debug APK
         shell: bash
         run: |
@@ -83,7 +130,6 @@ jobs:
           LOG="$RUNNER_TEMP/klencod-gradle.log"
 
           if [ -f gradlew ]; then
-            chmod +x gradlew
             ./gradlew --no-daemon --build-cache \
               :app:assembleDebug -x lint -x test \
               --stacktrace --info 2>&1 | tee "$LOG"
@@ -98,6 +144,7 @@ jobs:
         shell: bash
         run: |
           LOG="$RUNNER_TEMP/klencod-gradle.log"
+
           echo "===== Detailed Gradle diagnostics ====="
 
           if [ -f "$LOG" ]; then
