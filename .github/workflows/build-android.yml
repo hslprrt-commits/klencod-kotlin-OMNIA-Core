@@ -1,3 +1,4 @@
+
 name: Build Android Kotlin APK
 
 on:
@@ -41,27 +42,26 @@ jobs:
           LOG="$RUNNER_TEMP/klencod-gradle.log"
 
           if [ -f gradlew ]; then
-            echo "✅ Using Gradle Wrapper (gradlew)"
-            chmod +x gradlew || true
-            ./gradlew --no-daemon --build-cache --parallel \
-              :app:assembleDebug -x lint -x test 2>&1 | tee "$LOG"
+            chmod +x gradlew
+            ./gradlew --no-daemon --build-cache \
+              :app:assembleDebug -x lint -x test \
+              --stacktrace --info 2>&1 | tee "$LOG"
           else
-            echo "⚠️ gradlew غير موجود — استخدام gradle من النظام"
-            echo "ℹ️ هذا شائع في المشاريع المستوردة من الخارج"
-            gradle --no-daemon --build-cache --parallel \
-              :app:assembleDebug -x lint -x test 2>&1 | tee "$LOG"
+            gradle --no-daemon --build-cache \
+              :app:assembleDebug -x lint -x test \
+              --stacktrace --info 2>&1 | tee "$LOG"
           fi
 
-      - name: Print compiler diagnostics on failure
+      - name: Print detailed diagnostics
         if: failure()
         shell: bash
         run: |
           LOG="$RUNNER_TEMP/klencod-gradle.log"
-          echo "===== Klencod compiler diagnostics ====="
-          if [[ -f "$LOG" ]]; then
-            grep -E 'error:|warning:|FAILED|Compilation failed|BUILD FAILED|What went wrong' "$LOG" | tail -n 120 || true
+          echo "===== Detailed Gradle diagnostics ====="
+          if [ -f "$LOG" ]; then
+            tail -n 250 "$LOG"
           else
-            echo "Gradle output file was not created."
+            echo "Gradle log not found."
           fi
 
       - name: Upload APK artifact
