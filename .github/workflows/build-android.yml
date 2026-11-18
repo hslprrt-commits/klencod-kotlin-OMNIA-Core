@@ -33,19 +33,47 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'platforms;android-34 build-tools;34.0.0'
-          accept-android-sdk-licenses: true
 
       - name: Accept Android SDK licenses
         shell: bash
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            exit 1
+          fi
+
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses
+          RESULT=${PIPESTATUS[1]}
+
+          if [ "$RESULT" -ne 0 ]; then
+            echo "ERROR: SDK license acceptance failed"
+            exit "$RESULT"
+          fi
+
+          echo "SDK licenses accepted."
 
       - name: Verify Android SDK
         shell: bash
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          test -d "$ANDROID_HOME/platforms/android-34"
-          test -d "$ANDROID_HOME/build-tools/34.0.0"
+
+          test -d "$ANDROID_HOME/platforms/android-34" || {
+            echo "ERROR: Android 34 platform not found"
+            exit 1
+          }
+
+          test -d "$ANDROID_HOME/build-tools/34.0.0" || {
+            echo "ERROR: Build Tools 34.0.0 not found"
+            exit 1
+          }
+
           echo "Android SDK verification passed."
 
       - name: Build debug APK
@@ -71,6 +99,7 @@ jobs:
         run: |
           LOG="$RUNNER_TEMP/klencod-gradle.log"
           echo "===== Detailed Gradle diagnostics ====="
+
           if [ -f "$LOG" ]; then
             tail -n 250 "$LOG"
           else
@@ -84,20 +113,3 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
-          
-          
-          
-          
-          
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
-            exit 1
-          fi
-
-          echo "Using: $SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses
