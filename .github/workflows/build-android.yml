@@ -32,9 +32,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
+          packages: 'platforms;android-34 build-tools;34.0.0'
 
       - name: Accept Android SDK licenses
         shell: bash
@@ -111,7 +109,9 @@ jobs:
           import pathlib
           import xml.etree.ElementTree as ET
 
-          manifests = list(pathlib.Path("app/src").rglob("AndroidManifest.xml"))
+          manifests = list(
+              pathlib.Path("app/src").rglob("AndroidManifest.xml")
+          )
 
           if not manifests:
               raise SystemExit("ERROR: AndroidManifest.xml not found")
